@@ -1,163 +1,121 @@
 pipeline {
   agent any
 
-  // run nightly: H 0 * * * (configure on job / multibranch schedule)
-  triggers { cron('H 0 * * *') }
-
-  options {
-    // keep console timestamps for easier debugging
-    timestamps()
-    // keep build logs for some time (optional)
-    buildDiscarder(logRotator(numToKeepStr: '30'))
+  // Run daily at midnight
+  triggers {
+    cron('H 0 * * *')
   }
 
   environment {
-    // image name - make sure to use your Docker Hub namespace if needed
-    DOCKER_USER = "madhavan2454"
     IMAGE_NAME = "generic-app"
-    IMAGE_TAG = "pruned-${env.BUILD_NUMBER}"
-    FULL_IMAGE = "${env.DOCKER_USER}/${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-    DOCKERHUB_CREDENTIALS=credentials('docker-cred')
+    IMAGE_TAG  = "pruned-${BUILD_NUMBER}"
+    DOCKERHUB_CREDENTIALS = credentials('docker-cred')
+    DOCKER_USER = "madhavan2454"
   }
 
   stages {
+
+    /* ───────────────────────────────
+       1️⃣ Checkout - Clone and list branches
+    ─────────────────────────────── */
     stage('Checkout') {
       steps {
         echo "Cloning repository..."
-        // Standard checkout for a Jenkins multibranch or Pipeline job
-        checkout scm
+        git branch: 'main', url: 'https://github.com/madhavan2454/star-agile-insurance-project.git'
 
-        echo "Listing branches (local + remote recent):"
         sh '''
           git fetch --all --prune
-          echo "--- local branches sorted by committerdate ---"
-          git branch -v --sort=-committerdate || true
-          echo "--- remote branches sorted by committerdate ---"
-          git branch -r --sort=-committerdate || true
-          echo "--- all refs sorted by committerdate ---"
-          git for-each-ref --format='%(refname:short) %(committerdate:iso8601)' --sort=-committerdate refs/heads/ || true
+          echo "Branches sorted by latest commit:"
+          git branch -a --sort=-committerdate || true
         '''
       }
     }
 
-    stage('Git Prune Ops (cleanup local branches older than 7 days)') {
+    /* ───────────────────────────────
+       2️⃣ Git Prune Ops - Remove old local branches
+    ─────────────────────────────── */
+    stage('Git Prune Ops') {
       steps {
         script {
-          long start = System.currentTimeMillis()
+          echo "Cleaning up local branches older than 7 days..."
           try {
-            // Limit the prune operation to 2 minutes
             timeout(time: 2, unit: 'MINUTES') {
               sh '''
-                set -euo pipefail
-                git fetch --all --prune
-
-                # compute cutoff epoch (7 days ago)
-                CUTOFF=$(date -d "7 days ago" +%s)
-
-                # list local branches with their commit creation date (unix)
-                # NOTE: use creatordate:unix to get a stable epoch time
-                git for-each-ref --format='%(refname:short) %(creatordate:unix)' refs/heads/ | \
-                  awk -v cutoff="$CUTOFF" '$2 < cutoff { print $1 }' | \
-                  tee /tmp/branches-to-delete || true
-
-                if [ -s /tmp/branches-to-delete ]; then
-                  echo "Branches to delete:"
-                  cat /tmp/branches-to-delete
-                  # delete one-by-one to avoid xargs failure if nothing
-                  cat /tmp/branches-to-delete | xargs -r -n1 git branch -D || true
-                else
-                  echo "No local branches older than 7 days."
-                fi
+                set -e
+                CUTOFF=$(date -d "10 minutes ago" +%s)
+                git for-each-ref --format='%(refname:short) %(creatordate:unix)' refs/heads/ 
+                | awk -v c=$CUTOFF '$2 < c {print $1}' \
+                | grep -Ev '^ (main|master|develop|release/)' \
+                | xargs -r git branch -D
               '''
-            } // timeout
-            long elapsed = System.currentTimeMillis() - start
-            echo "Git prune completed in ${elapsed/1000} seconds."
-          } catch (org.jenkinsci.plugins.workflow.steps.TimeoutStepExecution.ExceededTimeout e) {
-            long elapsed = System.currentTimeMillis() - start
-            echo "Prune timed out after ${elapsed/1000} seconds."
-            currentBuild.result = 'ABORTED'
-            // abort the pipeline now
-            error("Aborting build due to prune timeout.")
+            }
           } catch (err) {
-            echo "Git prune error: ${err}"
-            currentBuild.result = 'FAILURE'
-            throw err
+            echo "Branch prune timed out or failed: ${err}"
+            currentBuild.result = 'ABORTED'
+            error("Stopping pipeline due to prune issue.")
           }
         }
       }
     }
 
+    /* ───────────────────────────────
+       3️⃣ Build Image - Create Docker image
+    ─────────────────────────────── */
     stage('Build Image') {
       steps {
-        script {
-          echo "Building Docker image: ${env.FULL_IMAGE}"
-          // ensure Docker daemon available on agent
-          sh """
-            docker build -t ${env.FULL_IMAGE} .
-            docker images --filter=reference='${env.FULL_NAME}:*' --format 'table {{.Repository}}\\t{{.Tag}}\\t{{.Size}}'
-          """
-        }
+        echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
+        sh '''
+          docker build -t ${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG} .
+          docker images ${IMAGE_NAME}
+        '''
       }
     }
 
+    /* ───────────────────────────────
+       4️⃣ Prune & Push - Cleanup + Push to Docker Hub
+    ─────────────────────────────── */
     stage('Prune and Push') {
       steps {
         script {
-          // measure prune duration
-          long pruneStart = System.currentTimeMillis()
-          try {
-            // protect prune with timeout too (prune can take long if diskfull)
+          // Clean up old images
+          
+
+          // Push to Docker Hub
+            try {
+                sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+                sh 'docker push ${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG}'
+            } catch (err) {
+              echo "Docker push failed: ${err}"
+              currentBuild.result = 'ABORTED'
+              error("Stopping pipeline due to push failure.")
+            }
+
+            try {
             timeout(time: 2, unit: 'MINUTES') {
               sh 'docker image prune -a -f || true'
             }
-            long pruneElapsed = System.currentTimeMillis() - pruneStart
-            echo "Docker image prune finished in ${pruneElapsed/1000} seconds."
-          } catch (org.jenkinsci.plugins.workflow.steps.TimeoutStepExecution.ExceededTimeout e) {
-            long pruneElapsed = System.currentTimeMillis() - pruneStart
-            echo "Docker prune timed out after ${pruneElapsed/1000} seconds."
-            currentBuild.result = 'ABORTED'
-            error("Aborting due to docker prune timeout.")
           } catch (err) {
-            echo "Prune Error: ${err}"
+            echo "Docker prune timed out or failed."
             currentBuild.result = 'ABORTED'
-            error("Aborting due to docker prune error.")
-          }
-
-          // Now push the newly built image to Docker Hub
-          try {
-              echo "Logging in to Docker Hub as ${env.DOCKER_USER}"
-              sh 'echo $DOCKERHUB_CREDENTIALS_PASS | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
-
-              // optionally tag with your Docker Hub namespace (if IMAGE_NAME does not include <user>/)
-              // If your IMAGE_NAME is "generic-app", ensure your Docker username is prefixing:
-
-              echo "Pushing image to Dockerhub"
-              sh """
-                docker push ${FULL_IMAGE}
-              """
-          } catch (err) {
-            echo "Push Error: ${err}"
-            currentBuild.result = 'ABORTED'
-            error("Aborting due to docker push failure.")
+            error("Stopping pipeline due to prune issue.")
           }
         }
       }
-    } // end stage Prune and Push
-  } // stages
+    }
+  }
 
   post {
+    always {
+      sh 'docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" || true'
+    }
     success {
-      echo "Pipeline finished SUCCESS - image pushed: ${env.IMAGE_TAG}"
+      echo "✅ Pipeline completed successfully."
     }
     aborted {
-      echo "Pipeline ABORTED - check logs for timeout or errors."
+      echo "⚠️  Pipeline aborted (timeout or push error)."
     }
     failure {
-      echo "Pipeline FAILED - check logs."
-    }
-    always {
-      // small inventory of local images (helpful when debugging disk usage)
-      sh 'echo "Local images snapshot:"; docker images --format "table {{.Repository}}\\t{{.Tag}}\\t{{.Size}}" || true'
+      echo "❌ Pipeline failed."
     }
   }
 }
