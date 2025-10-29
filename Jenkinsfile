@@ -131,10 +131,9 @@ pipeline {
               // optionally tag with your Docker Hub namespace (if IMAGE_NAME does not include <user>/)
               // If your IMAGE_NAME is "generic-app", ensure your Docker username is prefixing:
 
-              echo "Pushing image ${remote}"
+              echo "Pushing image to Dockerhub"
               sh """
                 docker push ${FULL_IMAGE}
-                docker logout || true
               """
             }
           } catch (err) {
