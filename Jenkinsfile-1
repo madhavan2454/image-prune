@@ -76,15 +76,7 @@ pipeline {
       steps {
         script {
           // Clean up old images
-          try {
-            timeout(time: 2, unit: 'MINUTES') {
-              sh 'docker image prune -a -f || true'
-            }
-          } catch (err) {
-            echo "Docker prune timed out or failed."
-            currentBuild.result = 'ABORTED'
-            error("Stopping pipeline due to prune issue.")
-          }
+          
 
           // Push to Docker Hub
             try {
@@ -95,6 +87,16 @@ pipeline {
               currentBuild.result = 'ABORTED'
               error("Stopping pipeline due to push failure.")
             }
+
+            try {
+            timeout(time: 2, unit: 'MINUTES') {
+              sh 'docker image prune -a -f || true'
+            }
+          } catch (err) {
+            echo "Docker prune timed out or failed."
+            currentBuild.result = 'ABORTED'
+            error("Stopping pipeline due to prune issue.")
+          }
         }
       }
     }
