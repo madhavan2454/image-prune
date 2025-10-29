@@ -125,7 +125,6 @@ pipeline {
 
           // Now push the newly built image to Docker Hub
           try {
-            withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
               echo "Logging in to Docker Hub as ${env.DOCKER_USER}"
               sh 'echo $DOCKERHUB_CREDENTIALS_PASS | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
 
@@ -136,7 +135,6 @@ pipeline {
               sh """
                 docker push ${FULL_IMAGE}
               """
-            }
           } catch (err) {
             echo "Push Error: ${err}"
             currentBuild.result = 'ABORTED'
