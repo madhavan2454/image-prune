@@ -63,7 +63,7 @@ pipeline {
       steps {
         echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
         sh '''
-          docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+          docker build -t ${DOCKER_USER}/{IMAGE_NAME}:${IMAGE_TAG} .
           docker images ${IMAGE_NAME}
         '''
       }
@@ -89,11 +89,7 @@ pipeline {
           // Push to Docker Hub
             try {
                 sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
-              sh '''
-                docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG}
-                docker push ${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG}
-                docker logout || true
-              '''
+                sh 'docker push ${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG}'
             } catch (err) {
               echo "Docker push failed: ${err}"
               currentBuild.result = 'ABORTED'
