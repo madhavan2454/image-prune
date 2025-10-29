@@ -17,6 +17,7 @@ pipeline {
     IMAGE_NAME = "generic-app"
     IMAGE_TAG = "pruned-${env.BUILD_NUMBER}"
     FULL_IMAGE = "${env.DOCKER_USER}/${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+    DOCKERHUB_CREDENTIALS=credentials('docker-cred')
   }
 
   stages {
@@ -93,7 +94,7 @@ pipeline {
           // ensure Docker daemon available on agent
           sh """
             docker build -t ${env.FULL_IMAGE} .
-            docker images --filter=reference='${env.IMAGE_NAME}:*' --format 'table {{.Repository}}\\t{{.Tag}}\\t{{.Size}}'
+            docker images --filter=reference='${env.FULL_NAME}:*' --format 'table {{.Repository}}\\t{{.Tag}}\\t{{.Size}}'
           """
         }
       }
@@ -126,7 +127,7 @@ pipeline {
           try {
             withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
               echo "Logging in to Docker Hub as ${env.DOCKER_USER}"
-              sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+              sh 'echo $DOCKERHUB_CREDENTIALS_PASS | docker login -u $DOCKERHUB_CREDENTIALS_USR" --password-stdin'
 
               // optionally tag with your Docker Hub namespace (if IMAGE_NAME does not include <user>/)
               // If your IMAGE_NAME is "generic-app", ensure your Docker username is prefixing:
