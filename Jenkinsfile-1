@@ -88,7 +88,7 @@ pipeline {
           // Push to Docker Hub
             try {
               sh '''
-                echo $DOCKER_CREDENTIALS_PASS" | docker login -u $DOCKER_CREDENTAILS_USR --password-stdin
+                echo $DOCKER_CREDENTIALS_PASS | docker login -u $DOCKER_CREDENTAILS_USR --password-stdin
                 docker tag ${IMAGE_NAME}:${IMAGE_TAG} $DOCKER_CREDENTIALS_USR/${IMAGE_NAME}:${IMAGE_TAG}
                 docker push $USER/${IMAGE_NAME}:${IMAGE_TAG}
                 docker logout || true
