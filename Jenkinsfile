@@ -31,9 +31,13 @@ pipeline {
       }
     }
 
-    /* ───────────────────────────────
-       2️⃣ Git Prune Ops - Remove old local branches
-    ─────────────────────────────── */
+    stage('Run Test Cases'){
+      steps {
+        echo "Running test cases"
+        sh 'mvn clean package'
+      }
+    }
+
     stage('Git Prune Ops') {
       steps {
         script {
@@ -58,9 +62,6 @@ pipeline {
       }
     }
 
-    /* ───────────────────────────────
-       3️⃣ Build Image - Create Docker image
-    ─────────────────────────────── */
     stage('Build Image') {
       steps {
         echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
@@ -92,7 +93,7 @@ pipeline {
 
             try {
             timeout(time: 2, unit: 'MINUTES') {
-              sh 'docker image prune -a -f || true'
+              sh 'docker image prune -f || true'
             }
           } catch (err) {
             echo "Docker prune timed out or failed."
