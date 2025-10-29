@@ -10,6 +10,7 @@ pipeline {
     IMAGE_NAME = "generic-app"
     IMAGE_TAG  = "pruned-${BUILD_NUMBER}"
     DOCKERHUB_CREDENTIALS = credentials('docker-cred')
+    DOCKER_USER = "madhavan2454"
   }
 
   stages {
@@ -89,8 +90,8 @@ pipeline {
             try {
               sh '''
                 echo $DOCKER_CREDENTIALS_PASS | docker login -u $DOCKER_CREDENTIALS_USR --password-stdin
-                docker tag ${IMAGE_NAME}:${IMAGE_TAG} madhavan2454/${IMAGE_NAME}:${IMAGE_TAG}
-                docker push $USER/${IMAGE_NAME}:${IMAGE_TAG}
+                docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG}
+                docker push ${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG}
                 docker logout || true
               '''
             } catch (err) {
