@@ -127,7 +127,7 @@ pipeline {
           try {
             withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
               echo "Logging in to Docker Hub as ${env.DOCKER_USER}"
-              sh 'echo $DOCKERHUB_CREDENTIALS_PASS | docker login -u $DOCKERHUB_CREDENTIALS_USR" --password-stdin'
+              sh 'echo $DOCKERHUB_CREDENTIALS_PASS | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
 
               // optionally tag with your Docker Hub namespace (if IMAGE_NAME does not include <user>/)
               // If your IMAGE_NAME is "generic-app", ensure your Docker username is prefixing:
