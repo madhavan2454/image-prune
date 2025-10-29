@@ -13,9 +13,10 @@ pipeline {
 
   environment {
     // image name - make sure to use your Docker Hub namespace if needed
+    DOCKER_USER = "madhavan2454"
     IMAGE_NAME = "generic-app"
     IMAGE_TAG = "pruned-${env.BUILD_NUMBER}"
-    FULL_IMAGE = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+    FULL_IMAGE = "${env.DOCKER_USER}/${env.IMAGE_NAME}:${env.IMAGE_TAG}"
   }
 
   stages {
@@ -129,12 +130,10 @@ pipeline {
 
               // optionally tag with your Docker Hub namespace (if IMAGE_NAME does not include <user>/)
               // If your IMAGE_NAME is "generic-app", ensure your Docker username is prefixing:
-              def remote = "${DOCKER_USER}/${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-              sh "docker tag ${env.FULL_IMAGE} ${remote}"
 
               echo "Pushing image ${remote}"
               sh """
-                docker push ${remote}
+                docker push ${FULL_IMAGE}
                 docker logout || true
               """
             }
